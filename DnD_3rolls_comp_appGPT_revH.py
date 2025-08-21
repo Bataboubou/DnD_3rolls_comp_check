@@ -380,11 +380,11 @@ with st.expander("Download tables"):
 st.markdown("---")
 st.subheader("Decision Tree (first roll + push options)")
 
-compact_view  = st.checkbox("Compact view (hide +2 leaves)", True)
-show_contrib  = st.checkbox("Show global contributions", True)
+compact_view  = st.checkbox("Compact view (hide +2 leaves)", False)
+show_contrib  = st.checkbox("Show global contributions", False)
 
 # Make it readable on Streamlit Cloud:
-tree_scale    = st.slider("Tree font scale", 0.1, 2.0, 0.2, 0.1)  # bigger default
+tree_scale    = st.slider("Tree font scale", 0.1, 2.0, 0.4, 0.1)  # bigger default
 tree_height   = st.slider("Tree height (px)", 600, 2400, 1400, 100)
 
 # First-roll weights
@@ -499,6 +499,7 @@ if have_f3: add_fail_leaves("fail3", base_m3, fail3_w, "f3", "f3")
 
 # Browser renderer (no system Graphviz needed) + explicit height
 st.graphviz_chart(g.source, use_container_width=True)
+
 
 
 
