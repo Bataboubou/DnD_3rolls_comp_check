@@ -375,16 +375,17 @@ with st.expander("Download tables"):
 
 
 
-# --- UI toggles
-# --- Decision tree (colored groups) ------------------------------------------
+# --- Decision tree (browser renderer only, large fonts, tall height) ----------
 
 st.markdown("---")
 st.subheader("Decision Tree (first roll + push options)")
 
-compact_view  = st.checkbox("Compact view (hide +2 leaves)", False)
-show_contrib  = st.checkbox("Show global contributions", False)
-font_scale    = st.slider("Font scale", 1.0, 5.0, 1.0, 0.5)
-dpi           = st.slider("Render DPI", 96, 400, 96, 4)
+compact_view  = st.checkbox("Compact view (hide +2 leaves)", True)
+show_contrib  = st.checkbox("Show global contributions", True)
+
+# Make it readable on Streamlit Cloud:
+tree_scale    = st.slider("Tree font scale", 1.0, 6.0, 4.0, 0.5)  # bigger default
+tree_height   = st.slider("Tree height (px)", 600, 2400, 1400, 100)
 
 # First-roll weights
 succ_w  = p_succ[start_idx]
@@ -406,7 +407,6 @@ success_push = [("Keep", cap_idx(start_idx)),
                 ("+1",   cap_idx(start_idx+1)),
                 ("+2",   cap_idx(start_idx+2)),
                 ("Max",  4)]
-
 base_m1 = cap_idx(start_idx-1)
 base_m2 = cap_idx(start_idx-2)
 base_m3 = cap_idx(start_idx-3)
@@ -417,43 +417,42 @@ def fail_push(base):
         opts.insert(2, ("+2", cap_idx(base+2)))
     return opts
 
-# --- Colors per group
+# Colors per group
 COLOR = {
-    "succ":  {"edge": "#2e7d32", "leaf": "#e8f5e9"},  # green
-    "f1":    {"edge": "#ef6c00", "leaf": "#ffe0b2"},  # orange/amber
-    "f2":    {"edge": "#c62828", "leaf": "#ffcdd2"},  # red/pink
-    "f3":    {"edge": "#6a1b9a", "leaf": "#d1c4e9"},  # purple/lavender
+    "succ":  {"edge": "#2e7d32", "leaf": "#e8f5e9"},
+    "f1":    {"edge": "#ef6c00", "leaf": "#ffe0b2"},
+    "f2":    {"edge": "#c62828", "leaf": "#ffcdd2"},
+    "f3":    {"edge": "#6a1b9a", "leaf": "#d1c4e9"},
 }
 
-# Build DOT
+# Big fonts (browser renderer ignores DPI, so just go big)
+title_fs = str(int(14 * tree_scale * 2.2))
+node_fs  = str(int(12 * tree_scale * 2.2))
+edge_fs  = str(int(11 * tree_scale * 2.2))
+
 title = f"Decision Tree: Start {STATES[start_idx]}, DD{DD}, B={B:+}, T={T}, Need {need_successes}"
-node_font  = str(int(12 * font_scale * 2.0))
-edge_font  = str(int(11 * font_scale * 2.0))
-title_font = str(int(14 * font_scale * 2.0))
+g = gv.Digraph(comment="Decision Tree")
 
-g = gv.Digraph(comment="Decision Tree", format="png")
-g.attr(rankdir="TB", label=title, labelloc="t", fontsize=title_font)
-g.attr(splines="spline", concentrate="true", nodesep="0.15", ranksep="0.9", ratio="compress")
-g.attr('graph', dpi=str(dpi))
+# Vertical and compact: smaller node/row spacing; remove long edge labels
+g.attr(rankdir="TB", label=title, labelloc="t", fontsize=title_fs)
+g.attr(splines="spline", concentrate="true", nodesep="0.12", ranksep="0.7", ratio="compress")
+
+# Default node/edge styles
 g.attr('node', shape='circle', style='filled', fillcolor='#cfe8ff',
-       fontname='Helvetica', fontsize=node_font, penwidth='2')
-g.attr('edge', fontname='Helvetica', fontsize=edge_font, penwidth='2')
+       fontname='Helvetica', fontsize=node_fs, penwidth='2', margin="0.08")
+g.attr('edge', fontname='Helvetica', fontsize=edge_fs, penwidth='2')
 
-# Root and first split
-root_id = "root"
-g.node(root_id, f"Start ({STATES[start_idx]})")
-
-# Success branch node
+# Root & first split (short labels keep it narrow)
+g.node("root", f"Start ({STATES[start_idx]})")
 g.node("succ1", "Success_1")
-g.edge(root_id, "succ1", label=pct_label(succ_w),
+g.edge("root", "succ1", label=pct_label(succ_w),
        color=COLOR["succ"]["edge"], fontcolor=COLOR["succ"]["edge"])
 
-# Fail branches
 def add_fail_branch(node_id, label, w, tag):
-    show = True if w > 0 or not compact_view else False
+    show = True if (w > 0 or not compact_view) else False
     if show:
         g.node(node_id, label)
-        g.edge(root_id, node_id, label=pct_label(w),
+        g.edge("root", node_id, label=pct_label(w),
                color=COLOR[tag]["edge"], fontcolor=COLOR[tag]["edge"])
         return True
     return False
@@ -462,13 +461,19 @@ have_f1 = add_fail_branch("fail1", "Fail-1", fail1_w, "f1")
 have_f2 = add_fail_branch("fail2", "Fail-2", fail2_w, "f2")
 have_f3 = add_fail_branch("fail3", "Fail-3", fail3_w, "f3")
 
-# Leaf node factory with colored fill
+def leaf_multiline(p: float, contrib: float | None) -> str:
+    # Uses your fraction rules (friendly_fraction_label and pct_label should already be defined)
+    lines = [pct_label(p), f"({friendly_fraction_label(p)})"]
+    if contrib is not None:
+        lines.append(f"contrib {contrib*100:.1f}%")
+    return "\\n".join(lines)
+
 def leaf_node(node_id: str, title_text: str, p: float, contrib: float | None, tag: str):
     g.attr('node', shape='box', style='rounded,filled',
-           fillcolor=COLOR[tag]["leaf"], margin="0.05")
+           fillcolor=COLOR[tag]["leaf"], margin="0.06")
     g.node(node_id, f"{title_text}\\n{leaf_multiline(p, contrib)}")
-    # restore defaults for next nodes
-    g.attr('node', shape='circle', style='filled', fillcolor='#cfe8ff', margin="0.11")
+    # restore defaults
+    g.attr('node', shape='circle', style='filled', fillcolor='#cfe8ff', margin="0.08")
 
 # Leaves under Success_1
 succ_opts = success_push if not compact_view else [("Keep",cap_idx(start_idx)), ("+1",cap_idx(start_idx+1)), ("Max",4)]
@@ -479,7 +484,7 @@ for name, s2 in succ_opts:
     leaf_node(leaf, f"{name} ({STATES[s2]})", p_cond, contrib, "succ")
     g.edge("succ1", leaf, label="", color=COLOR["succ"]["edge"])
 
-# Leaves under each Fail branch
+# Leaves under fail branches
 def add_fail_leaves(parent_id, base_state, w, tag, prefix):
     for name, s2 in fail_push(base_state):
         p_cond = after_fail_cond(s2)
@@ -492,11 +497,6 @@ if have_f1: add_fail_leaves("fail1", base_m1, fail1_w, "f1", "f1")
 if have_f2: add_fail_leaves("fail2", base_m2, fail2_w, "f2", "f2")
 if have_f3: add_fail_leaves("fail3", base_m3, fail3_w, "f3", "f3")
 
-# Render PNG (with fallback to browser if dot is missing)
-try:
-    png_bytes = g.pipe(format="png")
-    st.image(png_bytes, use_container_width=True, caption="Decision tree")
-except Exception:
-    st.warning("System Graphviz not found; using browser fallback (smaller text).")
-    st.graphviz_chart(g.source, use_container_width=True)
+# Browser renderer (no system Graphviz needed) + explicit height
+st.graphviz_chart(g.source, use_container_width=True, height=tree_height)
 
