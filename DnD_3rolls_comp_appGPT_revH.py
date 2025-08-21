@@ -435,7 +435,7 @@ g = gv.Digraph(comment="Decision Tree")
 
 # Vertical and compact: smaller node/row spacing; remove long edge labels
 g.attr(rankdir="TB", label=title, labelloc="t", fontsize=title_fs)
-g.attr(splines="spline", concentrate="true", nodesep="0.12", ranksep="0.7", ratio="compress")
+g.attr(splines="spline", concentrate="true", nodesep="0.10", ranksep="0.55", ratio="compress")
 
 # Default node/edge styles
 g.attr('node', shape='circle', style='filled', fillcolor='#cfe8ff',
@@ -498,5 +498,6 @@ if have_f2: add_fail_leaves("fail2", base_m2, fail2_w, "f2", "f2")
 if have_f3: add_fail_leaves("fail3", base_m3, fail3_w, "f3", "f3")
 
 # Browser renderer (no system Graphviz needed) + explicit height
-st.graphviz_chart(g.source, use_container_width=True, height=tree_height)
+st.graphviz_chart(g.source, use_container_width=True)
+
 
